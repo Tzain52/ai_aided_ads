@@ -34,11 +34,34 @@
             }, 3000);
         }
 
+        function formatMessage(text) {
+            // Convert headers (# Header)
+            text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+            text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+            text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+            
+            // Convert bold (*text*)
+            text = text.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
+            
+            // Convert italic (_text_)
+            text = text.replace(/_(.*?)_/g, '<em>$1</em>');
+            
+            // Convert lists
+            text = text.replace(/^\* (.*$)/gm, '<li>$1</li>');
+            text = text.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+            
+            // Convert paragraphs
+            text = text.replace(/\n\n/g, '</p><p>');
+            text = '<p>' + text + '</p>';
+            
+            return text;
+        }
+
         function addMessage(content, isUser = false) {
             const chatHistory = document.getElementById('chatHistory');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-            messageDiv.innerHTML = content;
+            messageDiv.innerHTML = isUser ? content : formatMessage(content);
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }

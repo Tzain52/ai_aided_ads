@@ -21,8 +21,13 @@
     </div>
 
     <script>
-        const socket = io();
+        const socket = io('/.netlify/functions/app', {
+            path: '/socket.io',
+            transports: ['websocket', 'polling']
+        });
+
         const sessionList = document.getElementById('sessionList');
+        let activeSessions = new Map();
 
         function updateSessions(sessions) {
             sessionList.innerHTML = '';
@@ -63,7 +68,7 @@
             const session = activeSessions.get(sessionId);
             if (session) {
                 console.log('Session details:', session);
-                // Implement a modal or detailed view here
+                // You can implement a modal or detailed view here
             }
         }
 
@@ -79,6 +84,7 @@
 
         socket.on('sessions', (sessions) => {
             console.log('Received sessions update:', sessions);
+            activeSessions = new Map(sessions);
             updateSessions(sessions);
         });
 

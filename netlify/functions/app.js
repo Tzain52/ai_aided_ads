@@ -17,18 +17,11 @@ async function connectQueue() {
     connection = await amqp.connect(process.env.RABBITMQ_URL);
     channel = await connection.createChannel();
     
-    // Delete the queue first to ensure clean state
-    try {
-      await channel.deleteQueue(QUEUE_NAME);
-    } catch (err) {
-      console.log('Queue deletion failed or queue did not exist:', err.message);
-    }
-    
     // Create queue with consistent settings
     await channel.assertQueue(QUEUE_NAME, {
       durable: true,
       arguments: {
-        'x-message-ttl': 60000, // Set to 1 minute
+        'x-message-ttl': 60000, // 1 minute TTL
         'x-max-length': 1000,
         'x-overflow': 'reject-publish',
         'x-queue-mode': 'lazy'
@@ -101,7 +94,7 @@ async function publishToQueue(data) {
       Buffer.from(JSON.stringify(data)),
       {
         persistent: true,
-        expiration: 60000 // Match the queue TTL
+        expiration: 60000 // Match queue TTL
       }
     );
   } catch (error) {

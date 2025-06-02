@@ -14,17 +14,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         setTimeout(() => {
             toast.style.display = 'none';
-        }, 3000);
+        }, 5000);
     }
 
-    function addMessage(content, isUser = false) {
+    function addMessage(content, isUser = false, isError = false) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
         
-        if (isUser) {
+        if (isUser || isError) {
             messageDiv.textContent = content;
         } else {
-            messageDiv.innerHTML = marked.parse(content);
+            try {
+                messageDiv.innerHTML = marked.parse(content);
+            } catch (e) {
+                messageDiv.textContent = content;
+            }
         }
         
         chatHistory.appendChild(messageDiv);
@@ -71,31 +75,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ query }),
             });
 
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                throw new Error('Server returned non-JSON response');
-            }
-
             const data = await response.json();
 
+            removeLoading();
+
             if (response.ok) {
-                removeLoading();
                 addMessage(data.response);
-                
                 if (data.message_limit_reached) {
                     showToast('Message limit reached. Only keeping last 10 messages as context.', true);
                 }
             } else {
-                removeLoading();
                 const errorMessage = data.error || 'An error occurred';
-                addMessage(`Error: ${errorMessage}`);
+                addMessage(`Error: ${errorMessage}`, false, true);
                 showToast(errorMessage);
             }
         } catch (error) {
             removeLoading();
-            const errorMessage = error.message || 'Failed to connect to server';
-            addMessage(`Error: ${errorMessage}`);
+            const errorMessage = `Error: ${error.message || 'Failed to connect to server'}`;
+            addMessage(errorMessage, false, true);
             showToast(errorMessage);
+            console.error('Error details:', error);
         } finally {
             sendButton.disabled = false;
         }

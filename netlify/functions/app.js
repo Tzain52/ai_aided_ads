@@ -17,13 +17,21 @@ async function connectQueue() {
     connection = await amqp.connect(process.env.RABBITMQ_URL);
     channel = await connection.createChannel();
     
+    // Delete the queue first to ensure clean state
+    try {
+      await channel.deleteQueue(QUEUE_NAME);
+    } catch (err) {
+      console.log('Queue deletion failed or queue did not exist:', err.message);
+    }
+    
     // Create queue with consistent settings
     await channel.assertQueue(QUEUE_NAME, {
       durable: true,
       arguments: {
-        'x-message-ttl': 300000,
+        'x-message-ttl': 60000, // Set to 1 minute
         'x-max-length': 1000,
-        'x-overflow': 'reject-publish'
+        'x-overflow': 'reject-publish',
+        'x-queue-mode': 'lazy'
       }
     });
 
@@ -60,6 +68,8 @@ async function setupQueueConsumer() {
                   response: result.content,
                   status: 'success'
                 });
+                // Update sessions list
+                io.emit('sessions', Array.from(activeSessions.entries()));
               }
             } finally {
               processingQueue.delete(sessionId);
@@ -91,7 +101,7 @@ async function publishToQueue(data) {
       Buffer.from(JSON.stringify(data)),
       {
         persistent: true,
-        expiration: 300000
+        expiration: 60000 // Match the queue TTL
       }
     );
   } catch (error) {
@@ -148,6 +158,8 @@ const io = new Server({
 });
 
 io.on('connection', (socket) => {
+  console.log('New admin connection');
+  
   socket.on('getSessions', () => {
     socket.emit('sessions', Array.from(activeSessions.entries()));
   });

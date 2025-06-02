@@ -3,6 +3,10 @@
   "private": true,
   "version": "1.0.0",
   "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
   "dependencies": {
     "openai": "^4.28.0",
     "amqplib": "^0.10.3",

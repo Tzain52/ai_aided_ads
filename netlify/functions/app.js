@@ -22,23 +22,35 @@ async function connectQueue() {
             throw new Error('RABBITMQ_URL not configured');
         }
 
+        // Reuse existing connection if available
+        if (connection && channel) {
+            log('info', 'Reusing existing RabbitMQ connection');
+            return channel;
+        }
+
         connection = await amqp.connect(process.env.RABBITMQ_URL);
         log('info', 'Connected to RabbitMQ');
         
         channel = await connection.createChannel();
         log('info', 'Created RabbitMQ channel');
         
-        // Create queue with consistent settings
-        const queueResult = await channel.assertQueue(QUEUE_NAME, {
-            durable: true,
-            arguments: {
-                'x-message-ttl': 60000, // 1 minute TTL
-                'x-max-length': 1000,
-                'x-overflow': 'reject-publish',
-                'x-queue-mode': 'lazy'
-            }
-        });
-        log('info', 'Queue asserted successfully', { queue: queueResult });
+        // Check if queue exists before asserting
+        try {
+            await channel.checkQueue(QUEUE_NAME);
+            log('info', 'Queue already exists, skipping assertion');
+        } catch (error) {
+            // Queue doesn't exist, create it
+            const queueResult = await channel.assertQueue(QUEUE_NAME, {
+                durable: true,
+                arguments: {
+                    'x-message-ttl': 60000,
+                    'x-max-length': 1000,
+                    'x-overflow': 'reject-publish',
+                    'x-queue-mode': 'lazy'
+                }
+            });
+            log('info', 'Queue created successfully', { queue: queueResult });
+        }
 
         // Set prefetch to 1 to ensure fair distribution
         await channel.prefetch(1);
@@ -47,6 +59,15 @@ async function connectQueue() {
         // Setup consumer
         await setupQueueConsumer();
         
+        // Handle connection closure
+        connection.on('close', async (err) => {
+            log('warn', 'RabbitMQ connection closed', { error: err?.message });
+            channel = null;
+            connection = null;
+            // Attempt to reconnect after a delay
+            setTimeout(connectQueue, 5000);
+        });
+
         return channel;
     } catch (error) {
         log('error', 'RabbitMQ connection error', { error: error.message, stack: error.stack });

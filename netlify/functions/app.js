@@ -28,7 +28,7 @@ async function connectQueue() {
     await channel.assertQueue("api_queue", {
       durable: true,
       arguments: {
-        'x-message-ttl': 1209600000, // 14 days
+        'x-message-ttl': 60000, // Match existing queue TTL of 60 seconds
         'x-max-length': 10000,
         'x-overflow': 'reject-publish',
         'x-queue-mode': 'lazy'
@@ -142,7 +142,7 @@ exports.handler = async function(event, context) {
           persistent: true,
           messageId: Date.now().toString(),
           timestamp: Date.now(),
-          expiration: '1209600000'
+          expiration: '60000' // Match queue TTL
         }
       );
       console.log('Message sent to RabbitMQ queue');

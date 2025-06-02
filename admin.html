@@ -14,6 +14,7 @@
         <h1>Admin Panel</h1>
         <div class="admin-panel">
             <h2>Active Sessions</h2>
+            <div id="connectionStatus" class="connection-status"></div>
             <div id="sessionList" class="session-list">
                 <!-- Sessions will be listed here -->
             </div>
@@ -23,14 +24,24 @@
     <script>
         const socket = io('/.netlify/functions/app', {
             path: '/socket.io',
-            transports: ['websocket', 'polling']
+            transports: ['websocket', 'polling'],
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000
         });
 
         const sessionList = document.getElementById('sessionList');
+        const connectionStatus = document.getElementById('connectionStatus');
         let activeSessions = new Map();
 
+        function updateConnectionStatus(status, message) {
+            connectionStatus.textContent = message;
+            connectionStatus.className = `connection-status ${status}`;
+        }
+
         function updateSessions(sessions) {
+            console.log('Updating sessions:', sessions);
             sessionList.innerHTML = '';
+            
             if (!Array.isArray(sessions) || sessions.length === 0) {
                 sessionList.innerHTML = '<p>No active sessions</p>';
                 return;
@@ -61,6 +72,7 @@
         }
 
         function clearSession(sessionId) {
+            console.log('Clearing session:', sessionId);
             socket.emit('clearSession', sessionId);
         }
 
@@ -68,18 +80,25 @@
             const session = activeSessions.get(sessionId);
             if (session) {
                 console.log('Session details:', session);
-                // You can implement a modal or detailed view here
+                alert('Session details logged to console');
             }
         }
 
         // Socket event handlers
         socket.on('connect', () => {
             console.log('Connected to server');
+            updateConnectionStatus('connected', 'Connected to server');
             socket.emit('getSessions');
         });
 
         socket.on('disconnect', () => {
             console.log('Disconnected from server');
+            updateConnectionStatus('disconnected', 'Disconnected from server');
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            updateConnectionStatus('error', 'Connection error: ' + error.message);
         });
 
         socket.on('sessions', (sessions) => {
@@ -98,7 +117,9 @@
 
         // Periodic refresh
         setInterval(() => {
-            socket.emit('getSessions');
+            if (socket.connected) {
+                socket.emit('getSessions');
+            }
         }, 5000);
     </script>
 </body>

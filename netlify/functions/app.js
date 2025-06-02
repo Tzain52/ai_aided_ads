@@ -9,93 +9,68 @@ const activeSessions = new Map();
 async function connectQueue() {
   try {
     if (!process.env.RABBITMQ_URL) {
-      throw new Error('RABBITMQ_URL environment variable is not set');
+      console.error('RABBITMQ_URL not configured');
+      return null;
     }
 
-    const opts = {
-      heartbeat: 60,
-      connection_timeout: 10000
-    };
-    
-    connection = await amqp.connect(process.env.RABBITMQ_URL, opts);
+    connection = await amqp.connect(process.env.RABBITMQ_URL);
     channel = await connection.createChannel();
     
-    // Configure queue with persistence settings
     await channel.assertQueue("api_queue", {
       durable: true,
       arguments: {
-        'x-message-ttl': 1209600000,
+        'x-message-ttl': 1209600000, // 14 days
         'x-max-length': 10000,
         'x-overflow': 'reject-publish',
         'x-queue-mode': 'lazy'
       }
     });
 
-    await channel.confirmSelect();
     await channel.prefetch(1);
-    
-    console.log("Successfully connected to RabbitMQ");
+    console.log("Connected to RabbitMQ");
+    return channel;
   } catch (error) {
-    console.error("Error connecting to RabbitMQ:", error);
-    throw error;
+    console.error("RabbitMQ connection error:", error);
+    return null;
   }
 }
 
 async function processMessage(userInput, sessionId) {
-  const client = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: 'https://api.deepseek.com/v1'
-  });
+  try {
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: 'https://api.deepseek.com/v1'
+    });
 
-  // Get or create session context
-  let sessionContext = activeSessions.get(sessionId) || [];
-  
-  // Add user message to context
-  sessionContext.push({ role: "user", content: userInput });
-  
-  const response = await client.chat.completions.create({
-    model: "deepseek-chat",
-    messages: sessionContext
-  });
+    let sessionContext = activeSessions.get(sessionId) || [];
+    sessionContext.push({ role: "user", content: userInput });
+    
+    const response = await client.chat.completions.create({
+      model: "deepseek-chat",
+      messages: sessionContext
+    });
 
-  // Add assistant response to context
-  const assistantMessage = {
-    role: response.choices[0].message.role,
-    content: response.choices[0].message.content
-  };
-  sessionContext.push(assistantMessage);
-
-  // Limit context to last 10 messages
-  if (sessionContext.length > 10) {
-    sessionContext = sessionContext.slice(-10);
+    const assistantMessage = {
+      role: response.choices[0].message.role,
+      content: response.choices[0].message.content
+    };
+    
+    sessionContext.push(assistantMessage);
+    
+    if (sessionContext.length > 10) {
+      sessionContext = sessionContext.slice(-10);
+    }
+    
+    activeSessions.set(sessionId, sessionContext);
+    return assistantMessage;
+  } catch (error) {
+    console.error("Error processing message:", error);
+    throw error;
   }
-
-  // Update session context
-  activeSessions.set(sessionId, sessionContext);
-
-  return assistantMessage;
 }
 
-// Admin panel setup
-const app = express();
-const io = new Server(app);
-
-io.on('connection', (socket) => {
-  // Send active sessions data
-  socket.emit('sessions', Array.from(activeSessions.entries()));
-
-  // Handle admin commands
-  socket.on('clearSession', (sessionId) => {
-    activeSessions.delete(sessionId);
-    io.emit('sessionCleared', sessionId);
-  });
-
-  socket.on('getSessions', () => {
-    socket.emit('sessions', Array.from(activeSessions.entries()));
-  });
-});
-
 exports.handler = async function(event, context) {
+  // Handle CORS
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -108,12 +83,12 @@ exports.handler = async function(event, context) {
   }
 
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method Not Allowed' }) };
   }
 
+  let mqChannel = null;
+  
   try {
-    await connectQueue();
-    
     const body = JSON.parse(event.body);
     const { query: userInput, sessionId } = body;
 
@@ -124,38 +99,31 @@ exports.handler = async function(event, context) {
       };
     }
 
-    await channel.sendToQueue(
-      "api_queue",
-      Buffer.from(JSON.stringify({ userInput, sessionId })),
-      { 
-        persistent: true,
-        messageId: Date.now().toString(),
-        timestamp: Date.now(),
-        expiration: '1209600000'
-      }
-    );
+    // Try to connect to RabbitMQ
+    mqChannel = await connectQueue();
+    
+    if (mqChannel) {
+      // If RabbitMQ is available, use it
+      await mqChannel.sendToQueue(
+        "api_queue",
+        Buffer.from(JSON.stringify({ userInput, sessionId })),
+        { 
+          persistent: true,
+          messageId: Date.now().toString(),
+          timestamp: Date.now(),
+          expiration: '1209600000'
+        }
+      );
+    }
 
-    const result = await Promise.race([
-      new Promise((resolve, reject) => {
-        channel.consume("api_queue", async (data) => {
-          try {
-            const inputData = JSON.parse(data.content);
-            const response = await processMessage(inputData.userInput, inputData.sessionId);
-            channel.ack(data);
-            resolve(response);
-          } catch (error) {
-            channel.ack(data);
-            reject(error);
-          }
-        });
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 30000)
-      )
-    ]);
+    // Process the message directly
+    const result = await processMessage(userInput, sessionId);
 
-    if (channel) await channel.close();
-    if (connection) await connection.close();
+    // Clean up RabbitMQ connection if it was established
+    if (mqChannel) {
+      await channel.close();
+      await connection.close();
+    }
 
     return {
       statusCode: 200,
@@ -171,8 +139,16 @@ exports.handler = async function(event, context) {
 
   } catch (error) {
     console.error('Error:', error);
-    if (channel) await channel.close();
-    if (connection) await connection.close();
+    
+    // Clean up RabbitMQ connection if it was established
+    if (mqChannel) {
+      try {
+        await channel.close();
+        await connection.close();
+      } catch (closeError) {
+        console.error('Error closing RabbitMQ connection:', closeError);
+      }
+    }
     
     return {
       statusCode: 500,
@@ -180,7 +156,9 @@ exports.handler = async function(event, context) {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*'
       },
-      body: JSON.stringify({ error: error.message || 'Internal Server Error' })
+      body: JSON.stringify({ 
+        error: 'An error occurred while processing your request. Please try again.' 
+      })
     };
   }
 };

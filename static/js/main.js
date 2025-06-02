@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = userInput.value.trim();
         
         if (!query) {
-            showToast('Query cannot be empty');
+            showToast('Please enter a message');
             return;
         }
 
@@ -104,7 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             removeLoading();
-            const errorMessage = `Error: ${error.message || 'Failed to connect to server'}`;
+            const errorMessage = 'Failed to connect to server. Please try again.';
             addMessage(errorMessage, false, true);
             showToast(errorMessage);
             console.error('Error details:', error);

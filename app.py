@@ -7,6 +7,7 @@ import uuid
 import json
 from flask_socketio import SocketIO, emit
 import logging
+import traceback
 
 # Configure logging
 logging.basicConfig(
@@ -31,16 +32,27 @@ logger.debug(f"Secret key configured: {'from env' if os.getenv('FLASK_SECRET_KEY
 # Store active sessions
 active_sessions = {}
 
+def format_error_response(error_message, error_details=None):
+    response = {
+        'error': error_message,
+        'status': 'error'
+    }
+    if error_details and app.debug:
+        response['details'] = error_details
+    return response
+
 # Error handlers
 @app.errorhandler(404)
 def not_found_error(error):
-    logger.error(f"404 error: {error}")
-    return jsonify({'error': 'Not found'}), 404
+    error_details = str(error)
+    logger.error(f"404 error: {error_details}")
+    return jsonify(format_error_response('Resource not found', error_details)), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    logger.error(f"500 error: {error}")
-    return jsonify({'error': 'Internal server error'}), 500
+    error_details = str(error)
+    logger.error(f"500 error: {error_details}")
+    return jsonify(format_error_response('Internal server error', error_details)), 500
 
 @app.route('/')
 def home():
@@ -56,32 +68,39 @@ def admin():
 def query():
     logger.debug("Received query request")
     
-    if not request.is_json:
-        logger.error("Request is not JSON")
-        return jsonify({'error': 'Request must be JSON'}), 400
-
-    data = request.get_json()
-    user_input = data.get('query', '').strip()
-    session_id = data.get('sessionId')
-    
-    logger.debug(f"Processing query for session {session_id}")
-    
-    if not user_input or not session_id:
-        logger.error("Missing query or sessionId")
-        return jsonify({'error': 'Query and sessionId are required'}), 400
-    
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        logger.error("API key not configured")
-        return jsonify({'error': 'API key not configured'}), 500
-    
     try:
+        if not request.is_json:
+            error_msg = "Request is not JSON"
+            logger.error(error_msg)
+            return jsonify(format_error_response(error_msg)), 400
+
+        data = request.get_json()
+        user_input = data.get('query', '').strip()
+        session_id = data.get('sessionId')
+        
+        logger.debug(f"Processing query for session {session_id}")
+        logger.debug(f"User input: {user_input[:50]}...")  # Log first 50 chars of input
+        
+        if not user_input:
+            error_msg = "Query cannot be empty"
+            logger.error(error_msg)
+            return jsonify(format_error_response(error_msg)), 400
+            
+        if not session_id:
+            error_msg = "SessionId is required"
+            logger.error(error_msg)
+            return jsonify(format_error_response(error_msg)), 400
+        
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            error_msg = "API key not configured"
+            logger.error(error_msg)
+            return jsonify(format_error_response(error_msg)), 500
+        
         logger.debug(f"Initializing session {session_id}")
-        # Initialize or get session messages
         if session_id not in active_sessions:
             active_sessions[session_id] = []
         
-        # Add user message to history
         user_message = {"role": "user", "content": user_input}
         active_sessions[session_id].append(user_message)
         
@@ -90,40 +109,41 @@ def query():
         client.base_url = "https://api.deepseek.com"
         
         logger.debug("Sending request to OpenAI")
-        # Send conversation history for this session
         response = client.chat.completions.create(
             model="deepseek-chat",
             messages=active_sessions[session_id]
         )
         
-        # Extract the message content and role from the response
         assistant_message = {
             "role": response.choices[0].message.role,
             "content": response.choices[0].message.content
         }
         logger.debug("Received response from OpenAI")
+        logger.debug(f"Assistant response length: {len(assistant_message['content'])}")
         
-        # Add assistant's response to history
         active_sessions[session_id].append(assistant_message)
         
-        # Check if we need to trim messages
         message_limit_reached = False
         if len(active_sessions[session_id]) > 10:
             logger.debug(f"Trimming message history for session {session_id}")
             active_sessions[session_id] = active_sessions[session_id][-10:]
             message_limit_reached = True
         
-        # Emit updated sessions to admin panel
         logger.debug("Emitting updated sessions to admin panel")
         socketio.emit('sessions', list(active_sessions.items()))
         
         return jsonify({
             'response': assistant_message['content'],
-            'message_limit_reached': message_limit_reached
+            'message_limit_reached': message_limit_reached,
+            'status': 'success'
         })
     except Exception as e:
+        error_details = {
+            'message': str(e),
+            'traceback': traceback.format_exc()
+        }
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify(format_error_response('An error occurred while processing your request', error_details)), 500
 
 @socketio.on('connect')
 def handle_connect():

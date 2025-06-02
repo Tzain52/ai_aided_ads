@@ -1,0 +1,9 @@
+{
+  "name": "wisdom-scroll",
+  "private": true,
+  "version": "1.0.0",
+  "type": "commonjs",
+  "dependencies": {
+    "openai": "^1.12.0"
+  }
+}

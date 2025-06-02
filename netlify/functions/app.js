@@ -17,13 +17,19 @@ async function connectQueue() {
     connection = await amqp.connect(process.env.RABBITMQ_URL, opts);
     channel = await connection.createChannel();
     
+    // Configure queue with persistence settings
     await channel.assertQueue("api_queue", {
-      durable: true,
+      durable: true, // Queue survives broker restart
       arguments: {
-        'x-message-ttl': 60000,
-        'x-max-length': 1000
+        'x-message-ttl': 1209600000, // Messages expire after 14 days
+        'x-max-length': 10000, // Store up to 10000 messages
+        'x-overflow': 'reject-publish', // Reject new messages when queue is full
+        'x-queue-mode': 'lazy' // Optimize for message persistence over performance
       }
     });
+
+    // Enable publisher confirms
+    await channel.confirmSelect();
 
     // Set prefetch to 1 to ensure even distribution of messages
     await channel.prefetch(1);
@@ -81,11 +87,16 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // Send message to queue
+    // Send message to queue with persistence
     await channel.sendToQueue(
       "api_queue",
       Buffer.from(JSON.stringify({ userInput })),
-      { persistent: true }
+      { 
+        persistent: true, // Message survives broker restart
+        messageId: Date.now().toString(), // Unique identifier for message
+        timestamp: Date.now(), // Timestamp for message tracking
+        expiration: '1209600000' // Message expires after 14 days
+      }
     );
 
     // Process message from queue with timeout

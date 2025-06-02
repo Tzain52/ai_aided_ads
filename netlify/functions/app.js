@@ -28,8 +28,8 @@ async function connectQueue() {
     await channel.assertQueue("api_queue", {
       durable: true,
       arguments: {
-        'x-message-ttl': 60000, // Match existing queue TTL of 60 seconds
-        'x-max-length': 10000,
+        'x-message-ttl': 60000, // 60 seconds TTL
+        'x-max-length': 1000,   // Match existing queue max length
         'x-overflow': 'reject-publish',
         'x-queue-mode': 'lazy'
       }

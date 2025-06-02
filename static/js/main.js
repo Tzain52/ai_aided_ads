@@ -1,30 +1,51 @@
 document.addEventListener('DOMContentLoaded', () => {
     const userInput = document.getElementById('userInput');
     const sendButton = document.getElementById('sendButton');
-    const responseArea = document.getElementById('response');
+    const chatHistory = document.getElementById('chat-history');
     const toast = document.getElementById('toast');
 
-    function showToast(message) {
+    function showToast(message, isWarning = false) {
         toast.textContent = message;
         toast.style.display = 'block';
+        if (isWarning) {
+            toast.style.background = '#f39c12'; // Orange color for warnings
+        } else {
+            toast.style.background = '#e74c3c'; // Red color for errors
+        }
         setTimeout(() => {
             toast.style.display = 'none';
         }, 3000);
     }
 
-    function showLoading() {
-        responseArea.innerHTML = '<span class="loading">Thinking</span>';
+    function addMessage(content, isUser = false) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+        
+        if (isUser) {
+            messageDiv.textContent = content;
+        } else {
+            messageDiv.innerHTML = marked.parse(content);
+        }
+        
+        chatHistory.appendChild(messageDiv);
+        // Scroll to bottom
+        chatHistory.scrollTop = chatHistory.scrollHeight;
     }
 
-    function renderAdBox() {
-        // You can randomize or rotate ad texts if you want
-        const adText = "Would Stride & Co. shoes be a good fit for people with wide feet?";
-        return `
-            <div class="ad-box">
-                <span>${adText}</span>
-                <span class="ad-tag">ads</span>
-            </div>
-        `;
+    function showLoading() {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message assistant-message';
+        loadingDiv.innerHTML = '<span class="loading">Thinking</span>';
+        loadingDiv.id = 'loading-message';
+        chatHistory.appendChild(loadingDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function removeLoading() {
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+            loadingMessage.remove();
+        }
     }
 
     async function sendQuery() {
@@ -35,6 +56,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Add user message to chat
+        addMessage(query, true);
+        
+        // Clear input
+        userInput.value = '';
+        
         sendButton.disabled = true;
         showLoading();
 
@@ -43,20 +70,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({ query }),
             });
 
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error('Server returned non-JSON response');
+            }
+
             const data = await response.json();
 
             if (response.ok) {
-                // Parse markdown and set HTML content, then append ad box
-                responseArea.innerHTML = marked.parse(data.response) + renderAdBox();
+                removeLoading();
+                addMessage(data.response);
+                
+                // Show warning toast if message limit is reached
+                if (data.message_limit_reached) {
+                    showToast('Message limit reached. Only keeping last 10 messages as context.', true);
+                }
             } else {
-                responseArea.textContent = `Error: ${data.error}`;
+                removeLoading();
+                const errorMessage = data.error || 'An error occurred';
+                addMessage(`Error: ${errorMessage}`);
+                showToast(errorMessage);
             }
         } catch (error) {
-            responseArea.textContent = `Error: ${error.message}`;
+            removeLoading();
+            const errorMessage = error.message || 'Failed to connect to server';
+            addMessage(`Error: ${errorMessage}`);
+            showToast(errorMessage);
         } finally {
             sendButton.disabled = false;
         }

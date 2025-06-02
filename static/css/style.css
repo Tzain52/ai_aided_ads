@@ -28,37 +28,80 @@ h1 {
     border-radius: 12px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 80vh;
 }
 
-.response-area {
-    min-height: 200px;
+.chat-history {
+    flex: 1;
     padding: 1.5rem;
-    border-bottom: 1px solid #eee;
-    white-space: pre-wrap;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.message {
+    padding: 1rem;
+    border-radius: 12px;
+    max-width: 85%;
+    word-wrap: break-word;
+}
+
+.user-message {
+    background: #2c3e50;
+    color: white;
+    align-self: flex-end;
+}
+
+.assistant-message {
+    background: #f8f9fa;
+    border: 1px solid #eee;
+    align-self: flex-start;
+}
+
+/* Customize scrollbar */
+.chat-history::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-history::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.chat-history::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 4px;
+}
+
+.chat-history::-webkit-scrollbar-thumb:hover {
+    background: #555;
 }
 
 /* Markdown Styles */
-.response-area h3 {
+.assistant-message h3 {
     color: #2c3e50;
     margin: 1.5rem 0 1rem 0;
     font-size: 1.4rem;
 }
 
-.response-area p {
+.assistant-message p {
     margin-bottom: 1rem;
 }
 
-.response-area strong {
+.assistant-message strong {
     color: #2c3e50;
     font-weight: 600;
 }
 
-.response-area ul {
+.assistant-message ul {
     margin: 1rem 0;
     padding-left: 1.5rem;
 }
 
-.response-area li {
+.assistant-message li {
     margin-bottom: 0.5rem;
 }
 
@@ -67,6 +110,7 @@ h1 {
     display: flex;
     gap: 1rem;
     background: #f8f9fa;
+    min-height: 100px;
 }
 
 textarea {
@@ -127,4 +171,4 @@ button:disabled {
     33% { content: '..'; }
     66% { content: '...'; }
     100% { content: '.'; }
-} 
+}

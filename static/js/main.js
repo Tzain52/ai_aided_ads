@@ -4,9 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatHistory = document.getElementById('chat-history');
     const toast = document.getElementById('toast');
     
-    // Generate a unique session ID
-    const sessionId = localStorage.getItem('sessionId') || crypto.randomUUID();
-    localStorage.setItem('sessionId', sessionId);
+    // Generate a unique session ID for this browser tab
+    const sessionId = crypto.randomUUID();
 
     function showToast(message, isWarning = false) {
         toast.textContent = message;

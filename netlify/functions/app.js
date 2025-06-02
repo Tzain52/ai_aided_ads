@@ -19,15 +19,6 @@ async function connectQueue() {
     connection = await amqp.connect(process.env.RABBITMQ_URL);
     channel = await connection.createChannel();
     
-    // Delete the queue if it exists
-    try {
-      console.log('Attempting to delete existing queue...');
-      await channel.deleteQueue("api_queue");
-      console.log('Existing queue deleted successfully');
-    } catch (error) {
-      console.log('No existing queue to delete or deletion failed:', error.message);
-    }
-
     console.log('Creating new queue with updated settings...');
     await channel.assertQueue("api_queue", {
       durable: true,
@@ -91,7 +82,6 @@ async function processMessage(userInput, sessionId) {
 
 exports.handler = async function(event, context) {
   console.log('Received request:', event.httpMethod);
-  let mqChannel = null;
   
   if (event.httpMethod === 'OPTIONS') {
     console.log('Handling OPTIONS request');
@@ -123,32 +113,8 @@ exports.handler = async function(event, context) {
       };
     }
 
-    mqChannel = await connectQueue();
-    
-    if (mqChannel) {
-      console.log('Sending message to RabbitMQ queue...');
-      await mqChannel.sendToQueue(
-        "api_queue",
-        Buffer.from(JSON.stringify({ userInput, sessionId })),
-        { 
-          persistent: true,
-          messageId: Date.now().toString(),
-          timestamp: Date.now(),
-          expiration: '60000'
-        }
-      );
-      console.log('Message sent to queue successfully');
-    }
-
     console.log('Processing message...');
     const result = await processMessage(userInput, sessionId);
-
-    if (mqChannel) {
-      console.log('Closing RabbitMQ connections...');
-      await channel.close();
-      await connection.close();
-      console.log('RabbitMQ connections closed');
-    }
 
     console.log('Sending successful response');
     return {
@@ -166,17 +132,6 @@ exports.handler = async function(event, context) {
   } catch (error) {
     console.error('Error in handler:', error.message);
     console.error('Stack trace:', error.stack);
-    
-    if (mqChannel) {
-      try {
-        console.log('Attempting to close RabbitMQ connections after error...');
-        await channel.close();
-        await connection.close();
-        console.log('RabbitMQ connections closed after error');
-      } catch (closeError) {
-        console.error('Error closing RabbitMQ connection:', closeError.message);
-      }
-    }
     
     return {
       statusCode: 500,

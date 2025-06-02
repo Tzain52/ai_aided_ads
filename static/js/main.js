@@ -38,7 +38,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function showLoading() {
         const loadingDiv = document.createElement('div');
         loadingDiv.className = 'message assistant-message';
-        loadingDiv.innerHTML = '<span class="loading">Thinking</span>';
+        loadingDiv.innerHTML = `
+            <div class="drum-animation">
+                <span class="drum">🥁</span>
+                <span class="drum">🥁</span>
+                <span class="drum">🥁</span>
+            </div>
+        `;
         loadingDiv.id = 'loading-message';
         chatHistory.appendChild(loadingDiv);
         chatHistory.scrollTop = chatHistory.scrollHeight;

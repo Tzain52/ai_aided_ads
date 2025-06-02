@@ -28,8 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
             messageDiv.textContent = content;
         } else {
             try {
+                // Log the received response
+                console.log('Received response:', content);
                 messageDiv.innerHTML = marked.parse(content);
             } catch (e) {
+                console.error('Error parsing markdown:', e);
                 messageDiv.textContent = content;
             }
         }
@@ -75,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
 
         try {
+            console.log('Sending query:', { query, sessionId });
             const response = await fetch('/.netlify/functions/app', {
                 method: 'POST',
                 headers: {
@@ -88,25 +92,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const data = await response.json();
+            console.log('Received response data:', data);
 
             removeLoading();
 
-            if (response.ok) {
+            if (response.ok && data.response) {
                 addMessage(data.response);
                 if (data.message_limit_reached) {
                     showToast('Message limit reached. Only keeping last 10 messages as context.', true);
                 }
             } else {
                 const errorMessage = data.error || 'An error occurred';
-                addMessage(`Error: ${errorMessage}`, false, true);
+                console.error('Error response:', errorMessage);
                 showToast(errorMessage);
             }
         } catch (error) {
+            console.error('Request error:', error);
             removeLoading();
             const errorMessage = 'Failed to connect to server. Please try again.';
-            addMessage(errorMessage, false, true);
             showToast(errorMessage);
-            console.error('Error details:', error);
         } finally {
             sendButton.disabled = false;
         }

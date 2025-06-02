@@ -8,14 +8,23 @@ const activeSessions = new Map();
 
 async function connectQueue() {
   try {
+    console.log('Attempting to connect to RabbitMQ...');
+    console.log('RABBITMQ_URL:', process.env.RABBITMQ_URL ? 'Configured' : 'Not configured');
+    
     if (!process.env.RABBITMQ_URL) {
       console.error('RABBITMQ_URL not configured');
       return null;
     }
 
+    console.log('Establishing connection...');
     connection = await amqp.connect(process.env.RABBITMQ_URL);
+    console.log('Connection established');
+
+    console.log('Creating channel...');
     channel = await connection.createChannel();
+    console.log('Channel created');
     
+    console.log('Asserting queue...');
     await channel.assertQueue("api_queue", {
       durable: true,
       arguments: {
@@ -25,18 +34,27 @@ async function connectQueue() {
         'x-queue-mode': 'lazy'
       }
     });
+    console.log('Queue asserted');
 
     await channel.prefetch(1);
-    console.log("Connected to RabbitMQ");
+    console.log("Successfully connected to RabbitMQ");
     return channel;
   } catch (error) {
-    console.error("RabbitMQ connection error:", error);
+    console.error("RabbitMQ connection error details:", {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      errno: error.errno
+    });
     return null;
   }
 }
 
 async function processMessage(userInput, sessionId) {
   try {
+    console.log('Processing message...');
+    console.log('OpenAI API Key:', process.env.OPENAI_API_KEY ? 'Configured' : 'Not configured');
+
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
       baseURL: 'https://api.deepseek.com/v1'
@@ -45,10 +63,12 @@ async function processMessage(userInput, sessionId) {
     let sessionContext = activeSessions.get(sessionId) || [];
     sessionContext.push({ role: "user", content: userInput });
     
+    console.log('Sending request to OpenAI...');
     const response = await client.chat.completions.create({
       model: "deepseek-chat",
       messages: sessionContext
     });
+    console.log('Received response from OpenAI');
 
     const assistantMessage = {
       role: response.choices[0].message.role,
@@ -64,12 +84,20 @@ async function processMessage(userInput, sessionId) {
     activeSessions.set(sessionId, sessionContext);
     return assistantMessage;
   } catch (error) {
-    console.error("Error processing message:", error);
+    console.error("Error processing message details:", {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      errno: error.errno
+    });
     throw error;
   }
 }
 
 exports.handler = async function(event, context) {
+  console.log('Handler function started');
+  console.log('HTTP Method:', event.httpMethod);
+  
   // Handle CORS
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -89,21 +117,24 @@ exports.handler = async function(event, context) {
   let mqChannel = null;
   
   try {
+    console.log('Parsing request body...');
     const body = JSON.parse(event.body);
     const { query: userInput, sessionId } = body;
 
+    console.log('Request validation...');
     if (!userInput || !sessionId) {
+      console.error('Missing required fields:', { userInput: !!userInput, sessionId: !!sessionId });
       return { 
         statusCode: 400, 
         body: JSON.stringify({ error: 'Query and sessionId are required' })
       };
     }
 
-    // Try to connect to RabbitMQ
+    console.log('Attempting RabbitMQ connection...');
     mqChannel = await connectQueue();
     
     if (mqChannel) {
-      // If RabbitMQ is available, use it
+      console.log('Sending message to RabbitMQ queue...');
       await mqChannel.sendToQueue(
         "api_queue",
         Buffer.from(JSON.stringify({ userInput, sessionId })),
@@ -114,15 +145,19 @@ exports.handler = async function(event, context) {
           expiration: '1209600000'
         }
       );
+      console.log('Message sent to RabbitMQ queue');
+    } else {
+      console.log('RabbitMQ connection not established, proceeding without queueing');
     }
 
-    // Process the message directly
+    console.log('Processing message directly...');
     const result = await processMessage(userInput, sessionId);
 
-    // Clean up RabbitMQ connection if it was established
     if (mqChannel) {
+      console.log('Closing RabbitMQ connections...');
       await channel.close();
       await connection.close();
+      console.log('RabbitMQ connections closed');
     }
 
     return {
@@ -138,15 +173,24 @@ exports.handler = async function(event, context) {
     };
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Handler error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      errno: error.errno
+    });
     
-    // Clean up RabbitMQ connection if it was established
     if (mqChannel) {
       try {
+        console.log('Attempting to close RabbitMQ connections after error...');
         await channel.close();
         await connection.close();
+        console.log('RabbitMQ connections closed after error');
       } catch (closeError) {
-        console.error('Error closing RabbitMQ connection:', closeError);
+        console.error('Error closing RabbitMQ connection:', {
+          message: closeError.message,
+          stack: closeError.stack
+        });
       }
     }
     
@@ -157,7 +201,8 @@ exports.handler = async function(event, context) {
         'Access-Control-Allow-Origin': '*'
       },
       body: JSON.stringify({ 
-        error: 'An error occurred while processing your request. Please try again.' 
+        error: 'An error occurred while processing your request. Please try again.',
+        details: error.message
       })
     };
   }

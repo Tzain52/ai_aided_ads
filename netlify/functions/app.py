@@ -6,6 +6,14 @@ from urllib.parse import parse_qs
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
+        # Validate origin
+        origin = self.headers.get('Origin', '')
+        allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
+        
+        if origin not in allowed_origins:
+            self.send_error(403, 'Origin not allowed')
+            return
+            
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         data = json.loads(post_data)
@@ -37,7 +45,8 @@ class handler(BaseHTTPRequestHandler):
             
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Access-Control-Allow-Credentials', 'true')
             self.end_headers()
             
             response_data = {
@@ -51,8 +60,16 @@ class handler(BaseHTTPRequestHandler):
             self.send_error(500, str(e))
             
     def do_OPTIONS(self):
+        origin = self.headers.get('Origin', '')
+        allowed_origins = os.getenv('ALLOWED_ORIGINS', '').split(',')
+        
+        if origin not in allowed_origins:
+            self.send_error(403, 'Origin not allowed')
+            return
+            
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Origin', origin)
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Credentials', 'true')
         self.end_headers()

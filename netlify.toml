@@ -6,3 +6,5 @@
   from = "/*"
   to = "/.netlify/functions/app/:splat"
   status = 200
+  force = true
+  headers = {X-Frame-Options = "DENY", X-XSS-Protection = "1; mode=block", X-Content-Type-Options = "nosniff"}

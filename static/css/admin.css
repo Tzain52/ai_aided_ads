@@ -1,0 +1,43 @@
+.admin-panel {
+    padding: 2rem;
+    background: #3c2820;
+    border-radius: 12px;
+    margin: 2rem;
+}
+
+.session-list {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.session-card {
+    background: #d4b483;
+    padding: 1rem;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.session-info {
+    flex: 1;
+}
+
+.session-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.admin-button {
+    background: #8b4513;
+    color: #f4d03f;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.admin-button:hover {
+    background: #6b3410;
+}

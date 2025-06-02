@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - The Wisdom of the Scroll</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/admin.css">
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Panel</h1>
+        <div class="admin-panel">
+            <h2>Active Sessions</h2>
+            <div id="sessionList" class="session-list">
+                <!-- Sessions will be listed here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const sessionList = document.getElementById('sessionList');
+
+        function updateSessions(sessions) {
+            sessionList.innerHTML = '';
+            sessions.forEach(([sessionId, messages]) => {
+                const card = document.createElement('div');
+                card.className = 'session-card';
+                card.innerHTML = `
+                    <div class="session-info">
+                        <h3>Session: ${sessionId}</h3>
+                        <p>Messages: ${messages.length}</p>
+                    </div>
+                    <div class="session-actions">
+                        <button class="admin-button" onclick="clearSession('${sessionId}')">Clear Session</button>
+                        <button class="admin-button" onclick="viewSession('${sessionId}')">View Details</button>
+                    </div>
+                `;
+                sessionList.appendChild(card);
+            });
+        }
+
+        function clearSession(sessionId) {
+            socket.emit('clearSession', sessionId);
+        }
+
+        function viewSession(sessionId) {
+            // Implement session detail view
+            console.log('Viewing session:', sessionId);
+        }
+
+        socket.on('sessions', updateSessions);
+        socket.on('sessionCleared', () => {
+            socket.emit('getSessions');
+        });
+
+        // Initial session load
+        socket.emit('getSessions');
+    </script>
+</body>
+</html>

@@ -3,6 +3,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('sendButton');
     const chatHistory = document.getElementById('chat-history');
     const toast = document.getElementById('toast');
+    
+    // Generate a unique session ID
+    const sessionId = localStorage.getItem('sessionId') || crypto.randomUUID();
+    localStorage.setItem('sessionId', sessionId);
 
     function showToast(message, isWarning = false) {
         toast.textContent = message;
@@ -78,7 +82,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ query }),
+                body: JSON.stringify({ 
+                    query,
+                    sessionId 
+                }),
             });
 
             const data = await response.json();

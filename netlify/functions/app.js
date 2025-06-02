@@ -5,11 +5,13 @@ let channel, connection;
 
 async function connectQueue() {
   try {
-    // CloudAMQP connection URL format: amqps://username:password@hostname/vhost
+    if (!process.env.RABBITMQ_URL) {
+      throw new Error('RABBITMQ_URL environment variable is not set');
+    }
+
     const opts = {
       heartbeat: 60,
-      connection_timeout: 10000,
-      protocol: 'amqps'  // Use AMQPS for CloudAMQP
+      connection_timeout: 10000
     };
     
     connection = await amqp.connect(process.env.RABBITMQ_URL, opts);
@@ -22,6 +24,11 @@ async function connectQueue() {
         'x-max-length': 1000
       }
     });
+
+    // Set prefetch to 1 to ensure even distribution of messages
+    await channel.prefetch(1);
+    
+    console.log("Successfully connected to RabbitMQ");
   } catch (error) {
     console.error("Error connecting to RabbitMQ:", error);
     throw error;
@@ -81,20 +88,25 @@ exports.handler = async function(event, context) {
       { persistent: true }
     );
 
-    // Process message from queue
-    const result = await new Promise((resolve, reject) => {
-      channel.consume("api_queue", async (data) => {
-        try {
-          const inputData = JSON.parse(data.content);
-          const response = await processMessage(inputData.userInput);
-          channel.ack(data);
-          resolve(response);
-        } catch (error) {
-          channel.ack(data);
-          reject(error);
-        }
-      });
-    });
+    // Process message from queue with timeout
+    const result = await Promise.race([
+      new Promise((resolve, reject) => {
+        channel.consume("api_queue", async (data) => {
+          try {
+            const inputData = JSON.parse(data.content);
+            const response = await processMessage(inputData.userInput);
+            channel.ack(data);
+            resolve(response);
+          } catch (error) {
+            channel.ack(data);
+            reject(error);
+          }
+        });
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 30000)
+      )
+    ]);
 
     // Cleanup
     if (channel) await channel.close();

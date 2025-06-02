@@ -23,18 +23,25 @@ async function connectQueue() {
     console.log('Creating channel...');
     channel = await connection.createChannel();
     console.log('Channel created');
-    
-    console.log('Asserting queue...');
-    await channel.assertQueue("api_queue", {
-      durable: true,
-      arguments: {
-        'x-message-ttl': 60000, // 60 seconds TTL
-        'x-max-length': 1000,   // Match existing queue max length
-        'x-overflow': 'reject-publish',
-        'x-queue-mode': 'lazy'
-      }
-    });
-    console.log('Queue asserted');
+
+    // Check if queue exists first
+    try {
+      console.log('Checking existing queue...');
+      await channel.checkQueue("api_queue");
+      console.log('Queue exists, skipping assertion');
+    } catch (error) {
+      console.log('Queue does not exist, creating new queue...');
+      await channel.assertQueue("api_queue", {
+        durable: true,
+        arguments: {
+          'x-message-ttl': 60000,
+          'x-max-length': 1000,
+          'x-overflow': 'reject-publish',
+          'x-queue-mode': 'lazy'
+        }
+      });
+      console.log('Queue created successfully');
+    }
 
     await channel.prefetch(1);
     console.log("Successfully connected to RabbitMQ");
@@ -142,7 +149,7 @@ exports.handler = async function(event, context) {
           persistent: true,
           messageId: Date.now().toString(),
           timestamp: Date.now(),
-          expiration: '60000' // Match queue TTL
+          expiration: '60000'
         }
       );
       console.log('Message sent to RabbitMQ queue');

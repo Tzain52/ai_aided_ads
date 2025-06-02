@@ -54,6 +54,7 @@ def query():
         
         # Add user message to history
         user_message = {"role": "user", "content": user_input}
+        print('user_message:', user_message)
         session['messages'].append(user_message)
         session.modified = True  # Mark session as modified
         
@@ -61,7 +62,8 @@ def query():
         
         client = OpenAI(api_key=api_key)
         client.base_url = "https://api.deepseek.com"
-        
+        print('api_key:', api_key)
+        print('session_messages:', session['messages'])
         # Send entire conversation history
         response = client.chat.completions.create(
             model="deepseek-chat",

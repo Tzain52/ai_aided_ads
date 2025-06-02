@@ -1,4 +1,5 @@
-.config
-llm_env/
-demo.py
 .env
+.config
+__pycache__/
+*.pyc
+.DS_Store

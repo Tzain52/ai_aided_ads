@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
 
         try {
-            const response = await fetch('/query', {
+            const response = await fetch('/.netlify/functions/app', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -4,147 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Wisdom of the Scroll</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="/static/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>The Wisdom of the Scroll</h1>
         <div class="chat-container">
-            <div class="chat-history" id="chatHistory">
+            <div class="chat-history" id="chat-history">
                 <!-- Messages will be added here -->
             </div>
             <div class="input-area">
                 <textarea id="userInput" placeholder="Write your message on the scroll..." rows="3"></textarea>
-                <button id="sendButton" onclick="sendMessage()">Send Scroll</button>
+                <button id="sendButton">Send Scroll</button>
             </div>
         </div>
     </div>
     <div class="toast" id="toast"></div>
-
-    <script>
-        let isProcessing = false;
-
-        function showToast(message) {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.style.display = 'block';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, 3000);
-        }
-
-        function formatMessage(text) {
-            // Convert headers (# Header)
-            text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
-            text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
-            text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
-            
-            // Convert bold (*text*)
-            text = text.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
-            
-            // Convert italic (_text_)
-            text = text.replace(/_(.*?)_/g, '<em>$1</em>');
-            
-            // Convert lists
-            text = text.replace(/^\* (.*$)/gm, '<li>$1</li>');
-            text = text.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
-            
-            // Convert paragraphs
-            text = text.replace(/\n\n/g, '</p><p>');
-            text = '<p>' + text + '</p>';
-            
-            return text;
-        }
-
-        function addMessage(content, isUser = false) {
-            const chatHistory = document.getElementById('chatHistory');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
-            messageDiv.innerHTML = isUser ? content : formatMessage(content);
-            chatHistory.appendChild(messageDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
-        function showLoadingState() {
-            const chatHistory = document.getElementById('chatHistory');
-            const loadingDiv = document.createElement('div');
-            loadingDiv.className = 'message assistant-message';
-            loadingDiv.id = 'loadingMessage';
-            loadingDiv.innerHTML = `
-                <div class="drum-animation">
-                    <span class="drum">🥁</span>
-                    <span class="drum">🥁</span>
-                    <span class="drum">🥁</span>
-                </div>
-            `;
-            chatHistory.appendChild(loadingDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
-        function removeLoadingState() {
-            const loadingMessage = document.getElementById('loadingMessage');
-            if (loadingMessage) {
-                loadingMessage.remove();
-            }
-        }
-
-        async function sendMessage() {
-            if (isProcessing) return;
-
-            const userInput = document.getElementById('userInput');
-            const message = userInput.value.trim();
-            
-            if (!message) return;
-
-            isProcessing = true;
-            const sendButton = document.getElementById('sendButton');
-            sendButton.disabled = true;
-
-            // Add user message to chat
-            addMessage(message, true);
-            userInput.value = '';
-
-            // Show loading state
-            showLoadingState();
-
-            try {
-                const response = await fetch('/query', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ query: message })
-                });
-
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-
-                const data = await response.json();
-                
-                // Remove loading state
-                removeLoadingState();
-                
-                // Add assistant's response
-                addMessage(data.response);
-            } catch (error) {
-                console.error('Error:', error);
-                showToast('Error: Could not get response from the server');
-                removeLoadingState();
-            } finally {
-                isProcessing = false;
-                sendButton.disabled = false;
-            }
-        }
-
-        // Allow sending message with Enter key (Shift+Enter for new line)
-        document.getElementById('userInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-    </script>
+    <script src="/static/js/main.js"></script>
 </body>
-</html> 
+</html>

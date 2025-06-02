@@ -3,6 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "commonjs",
+  "scripts": {
+    "start": "node netlify/functions/app.js",
+    "dev": "node netlify/functions/app.js",
+    "build": "echo 'No build step required'"
+  },
   "dependencies": {
     "openai": "^4.28.0",
     "amqplib": "^0.10.3",

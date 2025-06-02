@@ -59,83 +59,114 @@ async function connectQueue() {
             throw new Error('RABBITMQ_URL not configured');
         }
 
-        // Reuse existing connection if available
-        if (connection && channel) {
-            log('info', 'Reusing existing RabbitMQ connection');
+        // If already connected, return existing channel
+        if (channel && connection && connection.connection.serverProperties) {
+            log('info', 'Using existing RabbitMQ connection');
             return channel;
         }
 
+        // Close existing connections if they exist
+        if (channel) {
+            await channel.close();
+            channel = null;
+        }
+        if (connection) {
+            await connection.close();
+            connection = null;
+        }
+
+        // Create new connection
         connection = await amqp.connect(process.env.RABBITMQ_URL);
         log('info', 'Connected to RabbitMQ');
         
         channel = await connection.createChannel();
         log('info', 'Created RabbitMQ channel');
 
-        // Check if queue exists before asserting
-        try {
-            await channel.checkQueue(QUEUE_NAME);
-            log('info', 'Queue already exists, using existing queue');
-        } catch (error) {
-            log('info', 'Queue does not exist, creating new queue');
-            await channel.assertQueue(QUEUE_NAME, {
-                durable: true,
-                arguments: {
-                    'x-message-ttl': 60000,
-                    'x-max-length': 1000,
-                    'x-overflow': 'reject-publish',
-                    'x-queue-mode': 'lazy'
-                }
-            });
-        }
-
-        await channel.prefetch(1);
-        await setupQueueConsumer();
-
-        // Handle connection closure
-        connection.on('close', async (err) => {
-            log('warn', 'RabbitMQ connection closed', { error: err?.message });
-            channel = null;
-            connection = null;
-            setTimeout(connectQueue, 5000);
+        // Assert queue with updated settings
+        await channel.assertQueue(QUEUE_NAME, {
+            durable: true,
+            arguments: {
+                'x-message-ttl': 300000, // 5 minutes
+                'x-max-length': 1000,
+                'x-overflow': 'reject-publish'
+            }
         });
 
+        await channel.prefetch(1);
+        
+        // Set up error handlers
+        connection.on('error', (err) => {
+            log('error', 'RabbitMQ connection error', { error: err.message });
+            channel = null;
+            connection = null;
+        });
+
+        connection.on('close', () => {
+            log('warn', 'RabbitMQ connection closed');
+            channel = null;
+            connection = null;
+            // Attempt to reconnect after a delay
+            setTimeout(() => {
+                connectQueue().catch(err => {
+                    log('error', 'Reconnection failed', { error: err.message });
+                });
+            }, 5000);
+        });
+
+        // Set up consumer
+        await setupQueueConsumer();
+        
         return channel;
     } catch (error) {
         log('error', 'RabbitMQ connection error', { error: error.message, stack: error.stack });
+        // Clear invalid connections
+        channel = null;
+        connection = null;
         throw error;
     }
 }
 
 async function setupQueueConsumer() {
+    if (!channel) {
+        throw new Error('Channel not initialized');
+    }
+
     try {
         log('info', 'Setting up queue consumer');
         await channel.consume(QUEUE_NAME, async (msg) => {
-            if (msg !== null) {
-                try {
-                    const data = JSON.parse(msg.content.toString());
-                    const { sessionId, userInput } = data;
-                    
-                    if (!processingQueue.has(sessionId)) {
-                        processingQueue.set(sessionId, true);
-                        try {
-                            const result = await processMessage(userInput, sessionId);
-                            channel.ack(msg);
-                            
-                            io.emit(`response_${sessionId}`, {
-                                response: result.content,
-                                status: 'success'
-                            });
-                            io.emit('sessions', Array.from(activeSessions.entries()));
-                        } finally {
-                            processingQueue.delete(sessionId);
-                        }
-                    } else {
-                        channel.nack(msg, false, true);
+            if (msg === null) {
+                log('warn', 'Received null message');
+                return;
+            }
+
+            try {
+                const data = JSON.parse(msg.content.toString());
+                const { sessionId, userInput } = data;
+                
+                if (!processingQueue.has(sessionId)) {
+                    processingQueue.set(sessionId, true);
+                    try {
+                        const result = await processMessage(userInput, sessionId);
+                        channel.ack(msg);
+                        
+                        io.emit(`response_${sessionId}`, {
+                            response: result.content,
+                            status: 'success'
+                        });
+                        io.emit('sessions', Array.from(activeSessions.entries()));
+                    } catch (error) {
+                        log('error', 'Error processing message', { error: error.message });
+                        channel.nack(msg, false, false);
+                    } finally {
+                        processingQueue.delete(sessionId);
                     }
-                } catch (error) {
-                    log('error', 'Error processing message', { error: error.message });
-                    channel.nack(msg, false, false);
+                } else {
+                    log('info', 'Session already being processed, requeuing message', { sessionId });
+                    channel.nack(msg, false, true);
                 }
+            } catch (error) {
+                log('error', 'Error processing queue message', { error: error.message });
+                channel.nack(msg, false, false);
             }
         });
     } catch (error) {
@@ -146,6 +177,7 @@ async function setupQueueConsumer() {
 
 async function processMessage(userInput, sessionId) {
     try {
+        log('info', 'Processing message', { sessionId });
         const client = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY,
             baseURL: 'https://api.deepseek.com/v1'
@@ -164,6 +196,11 @@ async function processMessage(userInput, sessionId) {
             role: response.choices[0].message.role,
             content: response.choices[0].message.content
         };
+        
+        log('info', 'Received AI response', { 
+            sessionId,
+            messageLength: assistantMessage.content.length 
+        });
         
         sessionContext.push(assistantMessage);
         
@@ -187,6 +224,17 @@ app.post('/.netlify/functions/app', async (req, res) => {
             return res.status(400).json({ error: 'Query and sessionId are required' });
         }
 
+        // Ensure RabbitMQ connection is available
+        if (!channel) {
+            log('info', 'Reconnecting to RabbitMQ');
+            await connectQueue();
+        }
+
+        if (!channel) {
+            throw new Error('Failed to establish RabbitMQ connection');
+        }
+
+        log('info', 'Sending message to queue', { sessionId });
         await channel.sendToQueue(
             QUEUE_NAME,
             Buffer.from(JSON.stringify({ userInput, sessionId })),
@@ -204,6 +252,7 @@ app.post('/.netlify/functions/app', async (req, res) => {
             });
         });
 
+        log('info', 'Sending response to client', { sessionId });
         res.json({
             response: result.response,
             message_limit_reached: false

@@ -5,21 +5,21 @@ let channel, connection;
 
 async function connectQueue() {
   try {
-    // SSL options required for CloudAMQP
+    // CloudAMQP connection URL format: amqps://username:password@hostname/vhost
     const opts = {
       heartbeat: 60,
-      connection_timeout: 10000
+      connection_timeout: 10000,
+      protocol: 'amqps'  // Use AMQPS for CloudAMQP
     };
     
     connection = await amqp.connect(process.env.RABBITMQ_URL, opts);
     channel = await connection.createChannel();
     
-    // Ensure queue exists with proper settings
     await channel.assertQueue("api_queue", {
       durable: true,
       arguments: {
-        'x-message-ttl': 60000, // Messages expire after 60 seconds
-        'x-max-length': 1000    // Maximum 1000 messages in queue
+        'x-message-ttl': 60000,
+        'x-max-length': 1000
       }
     });
   } catch (error) {
@@ -78,7 +78,7 @@ exports.handler = async function(event, context) {
     await channel.sendToQueue(
       "api_queue",
       Buffer.from(JSON.stringify({ userInput })),
-      { persistent: true } // Make messages persistent
+      { persistent: true }
     );
 
     // Process message from queue

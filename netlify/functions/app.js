@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 
 let channel, connection;
 const activeSessions = new Map();
+const processingQueue = new Map();
 
 async function connectQueue() {
   try {
@@ -23,20 +24,78 @@ async function connectQueue() {
     await channel.assertQueue("api_queue", {
       durable: true,
       arguments: {
-        'x-message-ttl': 60000,
+        'x-message-ttl': 300000, // 5 minutes TTL
         'x-max-length': 1000,
         'x-overflow': 'reject-publish',
         'x-queue-mode': 'lazy'
       }
     });
 
-    await channel.prefetch(1);
+    // Increase prefetch to handle multiple messages
+    await channel.prefetch(5);
     console.log("Successfully connected to RabbitMQ and configured queue");
     return channel;
   } catch (error) {
     console.error("RabbitMQ connection error:", error.message);
     console.error("Stack trace:", error.stack);
     return null;
+  }
+}
+
+async function publishToQueue(data) {
+  try {
+    if (!channel) {
+      channel = await connectQueue();
+      if (!channel) throw new Error('Failed to connect to RabbitMQ');
+    }
+
+    const message = Buffer.from(JSON.stringify(data));
+    await channel.sendToQueue("api_queue", message, {
+      persistent: true,
+      expiration: 300000 // 5 minutes
+    });
+
+    return true;
+  } catch (error) {
+    console.error("Error publishing to queue:", error);
+    throw error;
+  }
+}
+
+async function consumeFromQueue(data) {
+  try {
+    if (!channel) {
+      channel = await connectQueue();
+      if (!channel) throw new Error('Failed to connect to RabbitMQ');
+    }
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Queue processing timeout'));
+      }, 30000); // 30 seconds timeout
+
+      channel.consume("api_queue", async (msg) => {
+        if (msg !== null) {
+          try {
+            const messageData = JSON.parse(msg.content.toString());
+            if (messageData.sessionId === data.sessionId) {
+              clearTimeout(timeout);
+              channel.ack(msg);
+              resolve(messageData);
+            } else {
+              // Put back messages for other sessions
+              channel.nack(msg, false, true);
+            }
+          } catch (error) {
+            console.error("Error processing message:", error);
+            channel.nack(msg, false, false);
+          }
+        }
+      });
+    });
+  } catch (error) {
+    console.error("Error consuming from queue:", error);
+    throw error;
   }
 }
 
@@ -74,7 +133,7 @@ async function processMessage(userInput, sessionId) {
     activeSessions.set(sessionId, sessionContext);
     return assistantMessage;
   } catch (error) {
-    console.error("Error processing message:", error.message);
+    console.error("Error processing message:", error);
     console.error("Stack trace:", error.stack);
     throw error;
   }
@@ -113,21 +172,59 @@ exports.handler = async function(event, context) {
       };
     }
 
-    console.log('Processing message...');
-    const result = await processMessage(userInput, sessionId);
+    // Check if this session is already being processed
+    if (processingQueue.has(sessionId)) {
+      console.log(`Session ${sessionId} is already being processed, queueing request`);
+      await publishToQueue({ userInput, sessionId });
+      
+      try {
+        const result = await consumeFromQueue({ sessionId });
+        return {
+          statusCode: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+          },
+          body: JSON.stringify({
+            response: result.response,
+            message_limit_reached: false
+          })
+        };
+      } catch (error) {
+        console.error('Error waiting for queued response:', error);
+        throw error;
+      }
+    }
 
-    console.log('Sending successful response');
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
-      body: JSON.stringify({
-        response: result.content,
-        message_limit_reached: false
-      })
-    };
+    // Mark this session as being processed
+    processingQueue.set(sessionId, true);
+
+    try {
+      console.log('Processing message...');
+      const result = await processMessage(userInput, sessionId);
+
+      // Publish the result to queue for any waiting requests
+      await publishToQueue({
+        sessionId,
+        response: result.content
+      });
+
+      console.log('Sending successful response');
+      return {
+        statusCode: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        },
+        body: JSON.stringify({
+          response: result.content,
+          message_limit_reached: false
+        })
+      };
+    } finally {
+      // Clear the processing flag
+      processingQueue.delete(sessionId);
+    }
 
   } catch (error) {
     console.error('Error in handler:', error.message);

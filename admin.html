@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/admin.css">
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.4/dist/socket.io.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -26,13 +26,25 @@
 
         function updateSessions(sessions) {
             sessionList.innerHTML = '';
-            sessions.forEach(([sessionId, messages]) => {
+            if (!Array.isArray(sessions) || sessions.length === 0) {
+                sessionList.innerHTML = '<p>No active sessions</p>';
+                return;
+            }
+
+            sessions.forEach(session => {
+                const [sessionId, messages] = session;
                 const card = document.createElement('div');
                 card.className = 'session-card';
+                
+                const lastMessage = messages[messages.length - 1];
+                const lastActivity = new Date().toLocaleTimeString();
+                
                 card.innerHTML = `
                     <div class="session-info">
                         <h3>Session: ${sessionId}</h3>
                         <p>Messages: ${messages.length}</p>
+                        <p>Last Activity: ${lastActivity}</p>
+                        <p>Last Message: ${lastMessage ? lastMessage.content.substring(0, 50) + '...' : 'No messages'}</p>
                     </div>
                     <div class="session-actions">
                         <button class="admin-button" onclick="clearSession('${sessionId}')">Clear Session</button>
@@ -48,17 +60,40 @@
         }
 
         function viewSession(sessionId) {
-            // Implement session detail view
-            console.log('Viewing session:', sessionId);
+            const session = activeSessions.get(sessionId);
+            if (session) {
+                console.log('Session details:', session);
+                // Implement a modal or detailed view here
+            }
         }
 
-        socket.on('sessions', updateSessions);
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('getSessions');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+        });
+
+        socket.on('sessions', (sessions) => {
+            console.log('Received sessions update:', sessions);
+            updateSessions(sessions);
+        });
+
         socket.on('sessionCleared', () => {
+            console.log('Session cleared');
             socket.emit('getSessions');
         });
 
         // Initial session load
         socket.emit('getSessions');
+
+        // Periodic refresh
+        setInterval(() => {
+            socket.emit('getSessions');
+        }, 5000);
     </script>
 </body>
 </html>

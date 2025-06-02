@@ -13,19 +13,37 @@
 
 .session-card {
     background: #d4b483;
-    padding: 1rem;
+    padding: 1.5rem;
     border-radius: 8px;
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    transition: all 0.3s ease;
+}
+
+.session-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .session-info {
     flex: 1;
 }
 
+.session-info h3 {
+    color: #2c1810;
+    margin-bottom: 0.5rem;
+}
+
+.session-info p {
+    color: #3c2820;
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+}
+
 .session-actions {
     display: flex;
+    flex-direction: column;
     gap: 0.5rem;
 }
 
@@ -36,8 +54,21 @@
     padding: 0.5rem 1rem;
     border-radius: 4px;
     cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: 'MedievalSharp', cursive;
 }
 
 .admin-button:hover {
     background: #6b3410;
+    transform: translateY(-1px);
+}
+
+.admin-button:active {
+    transform: translateY(0);
+}
+
+h2 {
+    color: #d4b483;
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
 }

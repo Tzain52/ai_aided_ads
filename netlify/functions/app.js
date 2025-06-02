@@ -13,7 +13,7 @@ async function connectQueue() {
     
     if (!process.env.RABBITMQ_URL) {
       console.error('RABBITMQ_URL not configured');
-      return null;
+      throw new Error('RABBITMQ_URL not configured');
     }
 
     console.log('Establishing connection to RabbitMQ...');
@@ -118,7 +118,8 @@ async function processMessage(userInput, sessionId) {
     });
 
     let sessionContext = activeSessions.get(sessionId) || [];
-    sessionContext.push({ role: "user", content: userInput });
+    const userMessage = { role: "user", content: userInput };
+    sessionContext.push(userMessage);
     
     console.log('Sending request to OpenAI...');
     const response = await client.chat.completions.create({
@@ -141,6 +142,12 @@ async function processMessage(userInput, sessionId) {
     }
     
     activeSessions.set(sessionId, sessionContext);
+    
+    // Emit updated sessions to all connected admin clients
+    if (io) {
+      io.emit('sessions', Array.from(activeSessions.entries()));
+    }
+    
     return assistantMessage;
   } catch (error) {
     console.error("Error processing message:", error);
@@ -148,6 +155,30 @@ async function processMessage(userInput, sessionId) {
     throw error;
   }
 }
+
+// Initialize Socket.IO
+const io = new Server({
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('Admin client connected');
+
+  socket.on('getSessions', () => {
+    socket.emit('sessions', Array.from(activeSessions.entries()));
+  });
+
+  socket.on('clearSession', (sessionId) => {
+    if (activeSessions.has(sessionId)) {
+      activeSessions.delete(sessionId);
+      socket.emit('sessionCleared');
+      io.emit('sessions', Array.from(activeSessions.entries()));
+    }
+  });
+});
 
 exports.handler = async function(event, context) {
   console.log('Received request:', event.httpMethod);
@@ -237,7 +268,7 @@ exports.handler = async function(event, context) {
     }
 
   } catch (error) {
-    console.error('Error in handler:', error.message);
+    console.error('Error in handler:', error);
     console.error('Stack trace:', error.stack);
     
     return {

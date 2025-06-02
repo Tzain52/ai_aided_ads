@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, session
 from openai import OpenAI
 import os
 import uuid
+import argparse
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)  # Required for session management
@@ -97,4 +98,8 @@ def query():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    parser = argparse.ArgumentParser(description='Run the Flask application')
+    parser.add_argument('--port', type=int, default=5000, help='Port number to run the server on (default: 5000)')
+    args = parser.parse_args()
+    
+    app.run(debug=True, port=args.port)

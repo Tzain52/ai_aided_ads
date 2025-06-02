@@ -5,11 +5,26 @@ let channel, connection;
 
 async function connectQueue() {
   try {
-    connection = await amqp.connect(process.env.RABBITMQ_URL);
+    // SSL options required for CloudAMQP
+    const opts = {
+      heartbeat: 60,
+      connection_timeout: 10000
+    };
+    
+    connection = await amqp.connect(process.env.RABBITMQ_URL, opts);
     channel = await connection.createChannel();
-    await channel.assertQueue("api_queue");
+    
+    // Ensure queue exists with proper settings
+    await channel.assertQueue("api_queue", {
+      durable: true,
+      arguments: {
+        'x-message-ttl': 60000, // Messages expire after 60 seconds
+        'x-max-length': 1000    // Maximum 1000 messages in queue
+      }
+    });
   } catch (error) {
     console.error("Error connecting to RabbitMQ:", error);
+    throw error;
   }
 }
 
@@ -62,7 +77,8 @@ exports.handler = async function(event, context) {
     // Send message to queue
     await channel.sendToQueue(
       "api_queue",
-      Buffer.from(JSON.stringify({ userInput }))
+      Buffer.from(JSON.stringify({ userInput })),
+      { persistent: true } // Make messages persistent
     );
 
     // Process message from queue
@@ -80,8 +96,9 @@ exports.handler = async function(event, context) {
       });
     });
 
-    await channel.close();
-    await connection.close();
+    // Cleanup
+    if (channel) await channel.close();
+    if (connection) await connection.close();
 
     return {
       statusCode: 200,
@@ -97,6 +114,7 @@ exports.handler = async function(event, context) {
 
   } catch (error) {
     console.error('Error:', error);
+    // Ensure cleanup on error
     if (channel) await channel.close();
     if (connection) await connection.close();
     

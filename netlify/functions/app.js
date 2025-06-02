@@ -20,8 +20,18 @@ async function connectQueue() {
     connection = await amqp.connect(process.env.RABBITMQ_URL);
     channel = await connection.createChannel();
     
-    console.log('Creating new queue with updated settings...');
-    await channel.assertQueue("api_queue", {
+    console.log('Creating queue with consistent settings...');
+    const queueName = "api_queue";
+    
+    // Delete the queue first to ensure clean state
+    try {
+      await channel.deleteQueue(queueName);
+    } catch (err) {
+      console.log('Queue did not exist or could not be deleted:', err.message);
+    }
+
+    // Create queue with consistent settings
+    await channel.assertQueue(queueName, {
       durable: true,
       arguments: {
         'x-message-ttl': 300000, // 5 minutes TTL
@@ -31,14 +41,13 @@ async function connectQueue() {
       }
     });
 
-    // Increase prefetch to handle multiple messages
+    // Set prefetch to handle multiple messages
     await channel.prefetch(5);
     console.log("Successfully connected to RabbitMQ and configured queue");
     return channel;
   } catch (error) {
-    console.error("RabbitMQ connection error:", error.message);
-    console.error("Stack trace:", error.stack);
-    return null;
+    console.error("RabbitMQ connection error:", error);
+    throw error;
   }
 }
 
@@ -74,13 +83,14 @@ async function consumeFromQueue(data) {
         reject(new Error('Queue processing timeout'));
       }, 30000); // 30 seconds timeout
 
-      channel.consume("api_queue", async (msg) => {
+      const consumer = channel.consume("api_queue", async (msg) => {
         if (msg !== null) {
           try {
             const messageData = JSON.parse(msg.content.toString());
             if (messageData.sessionId === data.sessionId) {
               clearTimeout(timeout);
               channel.ack(msg);
+              channel.cancel(consumer.consumerTag); // Stop consuming after finding our message
               resolve(messageData);
             } else {
               // Put back messages for other sessions

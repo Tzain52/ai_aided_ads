@@ -4,8 +4,8 @@
   publish = "."
 
 [[redirects]]
-  from = "/"
-  to = "/index.html"
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
   status = 200
 
 [[redirects]]
@@ -15,5 +15,5 @@
 
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/templates/index.html"
   status = 200

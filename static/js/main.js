@@ -8,9 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
         toast.textContent = message;
         toast.style.display = 'block';
         if (isWarning) {
-            toast.style.background = '#f39c12'; // Orange color for warnings
+            toast.style.background = '#f39c12';
         } else {
-            toast.style.background = '#e74c3c'; // Red color for errors
+            toast.style.background = '#e74c3c';
         }
         setTimeout(() => {
             toast.style.display = 'none';
@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         chatHistory.appendChild(messageDiv);
-        // Scroll to bottom
         chatHistory.scrollTop = chatHistory.scrollHeight;
     }
 
@@ -56,10 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Add user message to chat
         addMessage(query, true);
-        
-        // Clear input
         userInput.value = '';
         
         sendButton.disabled = true;
@@ -86,7 +82,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 removeLoading();
                 addMessage(data.response);
                 
-                // Show warning toast if message limit is reached
                 if (data.message_limit_reached) {
                     showToast('Message limit reached. Only keeping last 10 messages as context.', true);
                 }

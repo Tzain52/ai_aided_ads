@@ -10,18 +10,12 @@ body {
     background-color: #2c1810;
     color: #d4b483;
     background-image: url('https://www.transparenttextures.com/patterns/old-map.png');
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
 }
 
 .container {
     max-width: 800px;
     margin: 2rem auto;
     padding: 0 1rem;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
 }
 
 h1 {
@@ -40,8 +34,7 @@ h1 {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    flex: 1;
-    min-height: 500px;
+    height: 80vh;
     border: 2px solid #8b4513;
 }
 
@@ -61,7 +54,6 @@ h1 {
     max-width: 85%;
     word-wrap: break-word;
     position: relative;
-    margin-bottom: 0.5rem;
 }
 
 .user-message {
@@ -84,7 +76,6 @@ h1 {
     margin: 1rem 0;
     color: #2c1810;
     text-shadow: none;
-    text-align: left;
 }
 
 .assistant-message h2 {
@@ -127,11 +118,11 @@ h1 {
     margin-bottom: 0;
 }
 
+/* Drum Animation */
 .drum-animation {
     display: flex;
     gap: 0.5rem;
-    justify-content: center;
-    padding: 1rem;
+    font-size: 1.5rem;
 }
 
 .drum {
@@ -156,6 +147,7 @@ h1 {
     50% { opacity: 1; }
 }
 
+/* Customize scrollbar */
 .chat-history::-webkit-scrollbar {
     width: 8px;
 }
@@ -174,11 +166,13 @@ h1 {
     background: #6b3410;
 }
 
+/* Markdown Styles */
 .input-area {
     padding: 1rem;
     display: flex;
     gap: 1rem;
     background: #3c2820;
+    min-height: 100px;
     border-top: 2px solid #8b4513;
 }
 
@@ -192,7 +186,6 @@ textarea {
     font-size: 1rem;
     background: #d4b483;
     color: #2c1810;
-    min-height: 60px;
 }
 
 textarea::placeholder {
@@ -211,8 +204,6 @@ button {
     transition: all 0.3s ease;
     text-transform: uppercase;
     letter-spacing: 1px;
-    align-self: flex-end;
-    white-space: nowrap;
 }
 
 button:hover {
@@ -226,7 +217,6 @@ button:disabled {
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
-    opacity: 0.7;
 }
 
 .toast {
@@ -242,12 +232,11 @@ button:disabled {
     animation: fadeIn 0.3s ease;
     border: 1px solid #d4b483;
     font-family: 'MedievalSharp', cursive;
-    z-index: 1000;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translate(-50%, 20px); }
-    to { opacity: 1; transform: translate(-50%, 0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .loading {

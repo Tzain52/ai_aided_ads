@@ -31,7 +31,7 @@ exports.handler = async function(event, context) {
 
     const client = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-      baseURL: 'https://api.deepseek.com'
+      baseURL: 'https://api.deepseek.com/v1' // Updated baseURL to include v1
     });
 
     const response = await client.chat.completions.create({
@@ -60,7 +60,11 @@ exports.handler = async function(event, context) {
     console.error('Error:', error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Internal Server Error' })
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      },
+      body: JSON.stringify({ error: error.message || 'Internal Server Error' })
     };
   }
 };

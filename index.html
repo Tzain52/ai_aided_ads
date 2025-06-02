@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Wisdom of the Scroll</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>The Wisdom of the Scroll</h1>
+        <div class="chat-container">
+            <div class="chat-history" id="chat-history">
+                <!-- Messages will be added here -->
+            </div>
+            <div class="input-area">
+                <textarea id="userInput" placeholder="Write your message on the scroll..." rows="3"></textarea>
+                <button id="sendButton">Send Scroll</button>
+            </div>
+        </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

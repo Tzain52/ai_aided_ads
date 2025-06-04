@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="authorization" content="{{ bearer_token }}">
     <title>The Wisdom of the Scroll</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
@@ -24,6 +25,16 @@
 
     <script>
         let isProcessing = false;
+        let bearerToken = null;
+
+        // Get bearer token from response headers when page loads
+        window.addEventListener('load', function() {
+            const authHeader = document.querySelector('meta[name="authorization"]');
+            if (authHeader) {
+                bearerToken = authHeader.getAttribute('content');
+                console.log('Bearer token loaded:', bearerToken);
+            }
+        });
 
         function showToast(message) {
             const toast = document.getElementById('toast');
@@ -109,16 +120,24 @@
             showLoadingState();
 
             try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+
+                // Add Authorization header if we have a bearer token
+                if (bearerToken) {
+                    headers['Authorization'] = `Bearer ${bearerToken}`;
+                }
+
                 const response = await fetch('/query', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: headers,
                     body: JSON.stringify({ query: message })
                 });
 
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Network response was not ok');
                 }
 
                 const data = await response.json();
@@ -130,7 +149,7 @@
                 addMessage(data.response);
             } catch (error) {
                 console.error('Error:', error);
-                showToast('Error: Could not get response from the server');
+                showToast(error.message || 'Error: Could not get response from the server');
                 removeLoadingState();
             } finally {
                 isProcessing = false;

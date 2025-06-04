@@ -31,7 +31,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Strict'
 
 # Global request queue and worker thread
 request_queue = Queue()
-MAX_CONCURRENT_REQUESTS = 20
+MAX_CONCURRENT_REQUESTS = 4
 request_semaphore = threading.Semaphore(MAX_CONCURRENT_REQUESTS)
 executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS)
 
@@ -112,7 +112,7 @@ def process_api_request(client, messages):
             logger.debug(f"API request attempt {attempt + 1}/{max_retries}")
             with request_semaphore:
                 logger.debug("Acquired semaphore, sending request to API")
-                logger.info(f"API Request - Queue Length: {request_queue.qsize()}, Active Threads: {len(executor._threads)}")
+                logger.info(f"API Request - Queue Length: {executor._work_queue}, Active Threads: {len(executor._threads)}")
                 logger.info(f"Message to API: {messages[-1]['content'][:100]}...")  # Show first 100 chars of last message
                 response = client.chat.completions.create(
                     model="deepseek-chat",
